@@ -7,13 +7,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # URL del feed RSS de Rodalies Gencat Open Data
-rss_url = 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_r2_sud_es_ES.xml'
+rss_url = 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_rg1_es_ES.xml'
 
 # URL del webhook de IFTTT (cargada desde la variable de entorno)
 ifttt_webhook_url = os.getenv('IFTTT_WEBHOOK_URL')
 
 # Nombre de la línea que se notifica
-nombre_de_linea = 'R2 sud'
+nombre_de_linea = 'RG1'
 
 def obtener_incidencias(rss_url):
     feed = feedparser.parse(rss_url)
