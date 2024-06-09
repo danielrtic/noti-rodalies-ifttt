@@ -72,19 +72,33 @@ def registrar_incidencia(nombre_de_linea, incidencia):
     fecha_actual = datetime.now().strftime('%Y-%m-%d')
     hora_actual = datetime.now().strftime('%H:%M:%S')
     filename = f'{nombre_de_linea}_incidencias.csv'
-    file_exists = os.path.isfile(filename)
 
-    with open(filename, 'a', newline='', encoding='utf-8') as csvfile:
-        fieldnames = ['Linea', 'Descripcion', 'Fecha', 'Hora']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow({
-            'Linea': nombre_de_linea, 
-            'Descripcion': incidencia['description'], 
-            'Fecha': fecha_actual, 
-            'Hora': hora_actual
-        })
+    # Leer las incidencias existentes en el CSV
+    incidencias_existentes = []
+    if os.path.isfile(filename):
+        with open(filename, 'r', newline='', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                incidencias_existentes.append(row)
+
+    # Verificar si la incidencia ya está registrada hoy
+    incidencia_registrada = False
+    for existente in incidencias_existentes:
+        if existente['Descripcion'] == incidencia['description'] and existente['Fecha'] == fecha_actual:
+            incidencia_registrada = True
+            break
+
+    # Registrar la incidencia solo si no está registrada hoy
+    if not incidencia_registrada:
+        with open(filename, 'a', newline='', encoding='utf-8') as csvfile:
+            fieldnames = ['Linea', 'Descripcion', 'Fecha', 'Hora']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writerow({
+                'Linea': nombre_de_linea,
+                'Descripcion': incidencia['description'],
+                'Fecha': fecha_actual,
+                'Hora': hora_actual
+            })
 
 def main():
     limpiar_ultimas_incidencias()
@@ -107,6 +121,7 @@ def main():
                     'description': incidencia['description'],
                     'fecha': datetime.now().strftime('%Y-%m-%d')
                 })
+                
 
             registrar_incidencia(nombre_de_linea, incidencia)  # Registrar siempre en el CSV
 
