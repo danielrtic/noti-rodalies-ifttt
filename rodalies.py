@@ -7,9 +7,9 @@ from datetime import datetime, timedelta
 
 # Cargar las variables de entorno desde el archivo .env
 from dotenv import load_dotenv
-load_dotenv()  # Carga las variables de entorno
+load_dotenv()
 
-# URL del webhook de Google Chat (cargada desde la variable de entorno)
+# URL del webhook de Google Chat
 google_chat_webhook_url = os.getenv('GOOGLE_CHAT_WEBHOOK_URL')
 
 # Lista de URLs de feeds RSS de Rodalies
@@ -72,35 +72,27 @@ def registrar_incidencia(nombre_de_linea, incidencia):
     fecha_actual = datetime.now().strftime('%Y-%m-%d')
     hora_actual = datetime.now().strftime('%H:%M:%S')
     filename = f'{nombre_de_linea}_incidencias.csv'
-    fieldnames = ['Linea', 'Descripcion', 'Fecha', 'Hora']
 
-    # Leer las incidencias existentes en el CSV
+    # Leer las incidencias existentes en el CSV (sin encabezados)
     incidencias_existentes = []
     if os.path.isfile(filename):
         with open(filename, 'r', newline='') as csvfile:
-            reader = csv.DictReader(csvfile)
+            reader = csv.reader(csvfile)
             for row in reader:
                 incidencias_existentes.append(row)
 
     # Verificar si la incidencia ya está registrada hoy
     incidencia_registrada = False
     for existente in incidencias_existentes:
-        if existente['Descripcion'] == incidencia['description'] and existente['Fecha'] == fecha_actual:
+        if existente[1] == incidencia['description'] and existente[2] == fecha_actual:
             incidencia_registrada = True
             break
 
     # Registrar la incidencia solo si no está registrada hoy
     if not incidencia_registrada:
         with open(filename, 'a', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            if csvfile.tell() == 0:  # Escribir encabezado solo si el archivo está vacío
-                writer.writeheader()
-            writer.writerow({
-                'Linea': nombre_de_linea,
-                'Descripcion': incidencia['description'],
-                'Fecha': fecha_actual,
-                'Hora': hora_actual
-            })
+            writer = csv.writer(csvfile)
+            writer.writerow([nombre_de_linea, incidencia['description'], fecha_actual, hora_actual])
 
 def main():
     limpiar_ultimas_incidencias()
