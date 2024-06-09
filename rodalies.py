@@ -7,9 +7,9 @@ from datetime import datetime, timedelta
 
 # Cargar las variables de entorno desde el archivo .env
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv()  # Carga las variables de entorno
 
-# URL del webhook de Google Chat
+# URL del webhook de Google Chat (cargada desde la variable de entorno)
 google_chat_webhook_url = os.getenv('GOOGLE_CHAT_WEBHOOK_URL')
 
 # Lista de URLs de feeds RSS de Rodalies
@@ -72,11 +72,12 @@ def registrar_incidencia(nombre_de_linea, incidencia):
     fecha_actual = datetime.now().strftime('%Y-%m-%d')
     hora_actual = datetime.now().strftime('%H:%M:%S')
     filename = f'{nombre_de_linea}_incidencias.csv'
+    fieldnames = ['Linea', 'Descripcion', 'Fecha', 'Hora']
 
     # Leer las incidencias existentes en el CSV
     incidencias_existentes = []
     if os.path.isfile(filename):
-        with open(filename, 'r', newline='', encoding='utf-8') as csvfile:
+        with open(filename, 'r', newline='') as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
                 incidencias_existentes.append(row)
@@ -90,9 +91,10 @@ def registrar_incidencia(nombre_de_linea, incidencia):
 
     # Registrar la incidencia solo si no está registrada hoy
     if not incidencia_registrada:
-        with open(filename, 'a', newline='', encoding='utf-8') as csvfile:
-            fieldnames = ['Linea', 'Descripcion', 'Fecha', 'Hora']
+        with open(filename, 'a', newline='') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            if csvfile.tell() == 0:  # Escribir encabezado solo si el archivo está vacío
+                writer.writeheader()
             writer.writerow({
                 'Linea': nombre_de_linea,
                 'Descripcion': incidencia['description'],
@@ -121,7 +123,6 @@ def main():
                     'description': incidencia['description'],
                     'fecha': datetime.now().strftime('%Y-%m-%d')
                 })
-                
 
             registrar_incidencia(nombre_de_linea, incidencia)  # Registrar siempre en el CSV
 
