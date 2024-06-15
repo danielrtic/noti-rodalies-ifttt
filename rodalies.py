@@ -3,16 +3,16 @@ import feedparser
 import requests
 import csv
 import json
+import random
 from datetime import datetime, timedelta
-
-# Cargar las variables de entorno desde el archivo .env
 from dotenv import load_dotenv
+
+# Cargar variables desde .env (incluyendo API_URL para proxies)
 load_dotenv()
-
-# URL del webhook de Google Chat
 google_chat_webhook_url = os.getenv('GOOGLE_CHAT_WEBHOOK_URL')
+API_URL = os.getenv("API_URL")
 
-# Lista de URLs de feeds RSS de Rodalies
+# Lista de URLs de feeds RSS (vacía para que las agregues)
 rss_urls = {
     'R1': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_r1_es_ES.xml',
     'R2-norte': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_r2_nord_es_ES.xml',
@@ -58,8 +58,54 @@ def limpiar_ultimas_incidencias():
             ultimas_incidencias_limpias.append(incidencia)
     guardar_ultimas_incidencias(ultimas_incidencias_limpias)
 
+def obtener_proxys():
+    response = requests.get(API_URL)
+    if response.status_code == 200:
+        proxys = response.text.splitlines()
+        proxys_formateados = []
+        for proxy in proxys:
+            partes = proxy.split(":")
+            if len(partes) == 4:
+                ip, puerto, usuario, contraseña = partes
+                proxy_formateado = f"{ip}:{puerto}:{usuario}:{contraseña}"
+                proxys_formateados.append(proxy_formateado)
+        return proxys_formateados
+    else:
+        print("Error al obtener proxies de la API.")
+        return []
+
+def usar_proxy_rotatorio(url_objetivo):
+    proxys = obtener_proxys()
+    if not proxys:
+        return
+
+    proxy_elegido = random.choice(proxys)
+    ip, puerto, usuario, contraseña = proxy_elegido.split(":")
+    proxies = {
+        "http": f"http://{usuario}:{contraseña}@{ip}:{puerto}",
+        "https": f"http://{usuario}:{contraseña}@{ip}:{puerto}",
+    }
+
+    try:
+        response = requests.get(url_objetivo, proxies=proxies, timeout=10)
+        response.raise_for_status()
+        return response
+    except requests.exceptions.RequestException as e:
+        print(f"Error al usar el proxy: {e}")
+        return None  
+
 def obtener_incidencias(rss_url):
-    feed = feedparser.parse(rss_url)
+    use_proxy = os.getenv("USE_PROXY") == "on"  # Verificar si USE_PROXY está activado
+    
+    if use_proxy:
+        response = usar_proxy_rotatorio(rss_url)
+    else:
+        response = requests.get(rss_url, timeout=10)  # Petición directa sin proxy
+        response.raise_for_status()
+
+    if response is None:  # Manejar error si usar_proxy_rotatorio falla
+        return []
+    feed = feedparser.parse(response.content)
     return [{'title': entry.title, 'description': entry.description} for entry in feed.entries if 'description' in entry]
 
 def notificar_incidencia(webhook_url, incidencia, nombre_de_linea):
@@ -73,7 +119,6 @@ def registrar_incidencia(nombre_de_linea, incidencia):
     hora_actual = datetime.now().strftime('%H:%M:%S')
     filename = f'{nombre_de_linea}_incidencias.csv'
 
-    # Leer las incidencias existentes en el CSV (sin encabezados)
     incidencias_existentes = []
     if os.path.isfile(filename):
         with open(filename, 'r', newline='') as csvfile:
@@ -81,14 +126,12 @@ def registrar_incidencia(nombre_de_linea, incidencia):
             for row in reader:
                 incidencias_existentes.append(row)
 
-    # Verificar si la incidencia ya está registrada hoy
     incidencia_registrada = False
     for existente in incidencias_existentes:
         if existente[1] == incidencia['description'] and existente[2] == fecha_actual:
             incidencia_registrada = True
             break
 
-    # Registrar la incidencia solo si no está registrada hoy
     if not incidencia_registrada:
         with open(filename, 'a', newline='') as csvfile:
             writer = csv.writer(csvfile)
@@ -101,13 +144,12 @@ def main():
     for nombre_de_linea, rss_url in rss_urls.items():
         incidencias = obtener_incidencias(rss_url)
         for incidencia in incidencias:
-            # Verificar si la incidencia ya fue notificada hoy
             incidencia_notificada = False
             for ultima_incidencia in ultimas_incidencias:
                 if ultima_incidencia['description'] == incidencia['description'] and ultima_incidencia['fecha'] == datetime.now().strftime('%Y-%m-%d'):
                     incidencia_notificada = True
                     break
-            
+
             if not incidencia_notificada:
                 notificar_incidencia(google_chat_webhook_url, incidencia, nombre_de_linea)
                 lineas_con_incidencias.add(nombre_de_linea)
@@ -116,15 +158,14 @@ def main():
                     'fecha': datetime.now().strftime('%Y-%m-%d')
                 })
 
-            registrar_incidencia(nombre_de_linea, incidencia)  # Registrar siempre en el CSV
+            registrar_incidencia(nombre_de_linea, incidencia) 
 
-    # Enviar notificación final si hay incidencias
     if lineas_con_incidencias:
         mensaje_final = f"Resumen de incidencias en las líneas: {', '.join(lineas_con_incidencias)}"
         payload = {'text': mensaje_final}
         requests.post(google_chat_webhook_url, json=payload)
 
-    guardar_ultimas_incidencias(ultimas_incidencias)  # Guardar las últimas incidencias
+    guardar_ultimas_incidencias(ultimas_incidencias)
 
 if __name__ == "__main__":
     main()
