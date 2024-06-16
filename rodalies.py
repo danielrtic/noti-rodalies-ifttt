@@ -1,16 +1,19 @@
 import os
 import feedparser
 import requests
-import csv
-import json
 import random
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+import pymysql
 
-# Cargar variables desde .env (incluyendo API_URL para proxies)
+# Cargar variables desde .env
 load_dotenv()
 google_chat_webhook_url = os.getenv('GOOGLE_CHAT_WEBHOOK_URL')
 API_URL = os.getenv("API_URL")
+DB_HOST = os.getenv("DB_HOST")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = os.getenv("DB_NAME")
 
 # Lista de URLs de feeds RSS (vacía para que las agregues)
 rss_urls = {
@@ -32,31 +35,8 @@ rss_urls = {
     'RT2': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_rt2_es_ES.xml'
 }
 
-# Archivo para almacenar las últimas incidencias notificadas
-ULTIMAS_INCIDENCIAS_FILE = 'ultimas_incidencias.json'
-
-def cargar_ultimas_incidencias():
-    try:
-        with open(ULTIMAS_INCIDENCIAS_FILE, 'r') as f:
-            data = json.load(f)
-            if not isinstance(data, list):
-                raise json.JSONDecodeError("Formato JSON incorrecto", "", 0)
-            return data
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
-
-def guardar_ultimas_incidencias(ultimas_incidencias):
-    with open(ULTIMAS_INCIDENCIAS_FILE, 'w') as f:
-        json.dump(ultimas_incidencias, f)
-
-def limpiar_ultimas_incidencias():
-    ultimas_incidencias = cargar_ultimas_incidencias()
-    ayer = datetime.now() - timedelta(days=1)
-    ultimas_incidencias_limpias = []
-    for incidencia in ultimas_incidencias:
-        if datetime.strptime(incidencia['fecha'], '%Y-%m-%d') >= ayer:
-            ultimas_incidencias_limpias.append(incidencia)
-    guardar_ultimas_incidencias(ultimas_incidencias_limpias)
+# Conexión a MySQL usando PyMySQL (GLOBAL)
+cnx = None # Inicializar como None para evitar errores antes de la conexión
 
 def obtener_proxys():
     response = requests.get(API_URL)
@@ -92,21 +72,23 @@ def usar_proxy_rotatorio(url_objetivo):
         return response
     except requests.exceptions.RequestException as e:
         print(f"Error al usar el proxy: {e}")
-        return None  
+        return None
 
 def obtener_incidencias(rss_url):
-    use_proxy = os.getenv("USE_PROXY") == "on"  # Verificar si USE_PROXY está activado
-    
+    use_proxy = os.getenv("USE_PROXY") == "on"
     if use_proxy:
         response = usar_proxy_rotatorio(rss_url)
     else:
-        response = requests.get(rss_url, timeout=10)  # Petición directa sin proxy
+        response = requests.get(rss_url, timeout=10)
         response.raise_for_status()
 
-    if response is None:  # Manejar error si usar_proxy_rotatorio falla
+    if response is None:
         return []
     feed = feedparser.parse(response.content)
-    return [{'title': entry.title, 'description': entry.description} for entry in feed.entries if 'description' in entry]
+    incidencias = [{'title': entry.title, 'description': entry.description} for entry in feed.entries if 'description' in entry]
+    if not incidencias:
+        print(f"No se encontraron incidencias en el feed: {rss_url}")  # Verificar si se obtienen incidencias
+    return incidencias
 
 def notificar_incidencia(webhook_url, incidencia, nombre_de_linea):
     payload = {
@@ -114,58 +96,91 @@ def notificar_incidencia(webhook_url, incidencia, nombre_de_linea):
     }
     requests.post(webhook_url, json=payload)
 
-def registrar_incidencia(nombre_de_linea, incidencia):
+def registrar_incidencia(cursor, nombre_de_linea, incidencia):
     fecha_actual = datetime.now().strftime('%Y-%m-%d')
     hora_actual = datetime.now().strftime('%H:%M:%S')
-    filename = f'{nombre_de_linea}_incidencias.csv'
 
-    incidencias_existentes = []
-    if os.path.isfile(filename):
-        with open(filename, 'r', newline='') as csvfile:
-            reader = csv.reader(csvfile)
-            for row in reader:
-                incidencias_existentes.append(row)
+    # Consulta para verificar si la incidencia ya existe HOY
+    cursor.execute(
+        "SELECT * FROM incidencias WHERE linea = %s AND descripcion = %s AND fecha = %s",
+        (nombre_de_linea, incidencia['description'], fecha_actual)
+    )
+    if not cursor.fetchone():  # La incidencia no existe HOY
+        try:
+            print(f"Intentando insertar: {nombre_de_linea}, {incidencia['description']}, {fecha_actual}, {hora_actual}")
+            cursor.execute(
+                "INSERT INTO incidencias (linea, descripcion, fecha, hora) VALUES (%s, %s, %s, %s)",
+                (nombre_de_linea, incidencia['description'], fecha_actual, hora_actual)
+            )
+        except pymysql.Error as e:
+            print(f"Error al insertar incidencia en MySQL: {e}")
+        else:
+            cnx.commit()  # Confirmar cambios solo si no hay error
 
-    incidencia_registrada = False
-    for existente in incidencias_existentes:
-        if existente[1] == incidencia['description'] and existente[2] == fecha_actual:
-            incidencia_registrada = True
-            break
+def cargar_ultimas_incidencias(cursor):
+    try:
+        cursor.execute("SELECT descripcion, fecha FROM incidencias ORDER BY fecha DESC, hora DESC")
+        return [{'description': row[0], 'fecha': row[1].strftime('%Y-%m-%d')} for row in cursor.fetchall()]
+    except pymysql.Error as e:
+        print(f"Error al cargar últimas incidencias desde MySQL: {e}")
+        return []  # Devolver lista vacía en caso de error
 
-    if not incidencia_registrada:
-        with open(filename, 'a', newline='') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow([nombre_de_linea, incidencia['description'], fecha_actual, hora_actual])
+
+def limpiar_ultimas_incidencias(cursor):
+    ayer = datetime.now() - timedelta(days=1)
+    cursor.execute("DELETE FROM incidencias WHERE fecha < %s", (ayer.strftime('%Y-%m-%d'),))
 
 def main():
-    limpiar_ultimas_incidencias()
-    ultimas_incidencias = cargar_ultimas_incidencias()
-    lineas_con_incidencias = set()
-    for nombre_de_linea, rss_url in rss_urls.items():
-        incidencias = obtener_incidencias(rss_url)
-        for incidencia in incidencias:
-            incidencia_notificada = False
-            for ultima_incidencia in ultimas_incidencias:
-                if ultima_incidencia['description'] == incidencia['description'] and ultima_incidencia['fecha'] == datetime.now().strftime('%Y-%m-%d'):
-                    incidencia_notificada = True
-                    break
+    global cnx  # Indicar que estamos usando la variable global cnx
+    try:
+        # Conexión a MySQL usando PyMySQL
+        cnx = pymysql.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME
+        )
+        print("Conexión a MySQL exitosa")  # Confirmar conexión
+        cursor = cnx.cursor()
+    
+        limpiar_ultimas_incidencias(cursor)
+        ultimas_incidencias = cargar_ultimas_incidencias(cursor)
+        lineas_con_incidencias = set()
+        for nombre_de_linea, rss_url in rss_urls.items():
+            incidencias = obtener_incidencias(rss_url)
+            for incidencia in incidencias:
+                incidencia_notificada = False
+                for ultima_incidencia in ultimas_incidencias:
+                    if ultima_incidencia['description'] == incidencia['description'] and ultima_incidencia['fecha'] == datetime.now().strftime('%Y-%m-%d'):
+                        incidencia_notificada = True
+                        break
+    
+                if not incidencia_notificada:
+                    notificar_incidencia(google_chat_webhook_url, incidencia, nombre_de_linea)
+                    lineas_con_incidencias.add(nombre_de_linea)
+                    ultimas_incidencias.append({
+                        'description': incidencia['description'],
+                        'fecha': datetime.now().strftime('%Y-%m-%d')
+                    })
+    
+                registrar_incidencia(cursor, nombre_de_linea, incidencia)  # Intenta registrar (puede ser duplicado)
+    
+        if lineas_con_incidencias:
+            mensaje_final = f"Resumen de incidencias en las líneas: {', '.join(lineas_con_incidencias)}"
+            payload = {'text': mensaje_final}
+            requests.post(google_chat_webhook_url, json=payload)
 
-            if not incidencia_notificada:
-                notificar_incidencia(google_chat_webhook_url, incidencia, nombre_de_linea)
-                lineas_con_incidencias.add(nombre_de_linea)
-                ultimas_incidencias.append({
-                    'description': incidencia['description'],
-                    'fecha': datetime.now().strftime('%Y-%m-%d')
-                })
-
-            registrar_incidencia(nombre_de_linea, incidencia) 
-
-    if lineas_con_incidencias:
-        mensaje_final = f"Resumen de incidencias en las líneas: {', '.join(lineas_con_incidencias)}"
-        payload = {'text': mensaje_final}
-        requests.post(google_chat_webhook_url, json=payload)
-
-    guardar_ultimas_incidencias(ultimas_incidencias)
+    except pymysql.MySQLError as e:  # Capturar errores específicos de MySQL
+        if e.args[0] == 2003:
+            print(f"Error de conexión: No se puede conectar al servidor MySQL. Verifica el host y el puerto.")
+        elif e.args[0] == 1045:
+            print(f"Error de acceso: Usuario o contraseña incorrectos.")
+        else:
+            print(f"Error general de MySQL: {e}")
+    finally:
+        if cnx:  # Verificar si la conexión se estableció antes de cerrarla
+            cursor.close()
+            cnx.close()
 
 if __name__ == "__main__":
     main()
