@@ -126,10 +126,6 @@ def cargar_ultimas_incidencias(cursor):
         return []  # Devolver lista vacía en caso de error
 
 
-def limpiar_ultimas_incidencias(cursor):
-    ayer = datetime.now() - timedelta(days=1)
-    cursor.execute("DELETE FROM incidencias WHERE fecha < %s", (ayer.strftime('%Y-%m-%d'),))
-
 def main():
     global cnx  # Indicar que estamos usando la variable global cnx
     try:
@@ -143,7 +139,6 @@ def main():
         print("Conexión a MySQL exitosa")  # Confirmar conexión
         cursor = cnx.cursor()
     
-        limpiar_ultimas_incidencias(cursor)
         ultimas_incidencias = cargar_ultimas_incidencias(cursor)
         lineas_con_incidencias = set()
         for nombre_de_linea, rss_url in rss_urls.items():
