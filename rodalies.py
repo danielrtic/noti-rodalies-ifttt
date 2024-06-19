@@ -43,14 +43,12 @@ cnx = None # Inicializar como None para evitar errores antes de la conexión
 def obtener_proxys():
     response = requests.get(API_URL)
     if response.status_code == 200:
-        data = response.json()  # Obtener datos como JSON
+        proxys = response.text.splitlines()  # Divide la respuesta en líneas
         proxys_formateados = []
-        for proxy in data:  # Iterar sobre los datos JSON
-            ip = proxy.get("ip")
-            puerto = proxy.get("puerto")
-            usuario = proxy.get("usuario")
-            contraseña = proxy.get("contraseña")
-            if all([ip, puerto, usuario, contraseña]):
+        for proxy in proxys:
+            partes = proxy.split(":")
+            if len(partes) == 4:  # Verifica que tenga el formato esperado
+                ip, puerto, usuario, contraseña = partes
                 proxy_formateado = f"{ip}:{puerto}:{usuario}:{contraseña}"
                 proxys_formateados.append(proxy_formateado)
         return proxys_formateados
