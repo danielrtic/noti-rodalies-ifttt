@@ -18,8 +18,8 @@ DB_NAME = os.getenv("DB_NAME")
 # Lista de URLs de feeds RSS (vacía para que las agregues)
 rss_urls = {
     'R1': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_r1_es_ES.xml',
-    'R2-norte': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_r2_nord_es_ES.xml',
-    'R2-sud': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_r2_sud_es_ES.xml',
+    'R2-NORTE': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_r2_nord_es_ES.xml',
+    'R2-SUD': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_r2_sud_es_ES.xml',
     'R3': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_r3_es_ES.xml',
     'R4': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_r4_es_ES.xml',
     'R7': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_r7_es_ES.xml',
@@ -30,6 +30,8 @@ rss_urls = {
     'R14': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_r14_es_ES.xml',
     'R15': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_r15_es_ES.xml',
     'R16': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_r16_es_ES.xml',
+    'R17': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_r17_es_ES.xml',
+    'RL3': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_rl3_es_ES.xml',
     'RG1': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_rg1_es_ES.xml',
     'RT1': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_rt1_es_ES.xml',
     'RT2': 'https://www.gencat.cat/rodalies/incidencies_rodalies_rss_rt2_es_ES.xml'
