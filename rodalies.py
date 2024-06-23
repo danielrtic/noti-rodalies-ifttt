@@ -40,17 +40,25 @@ rss_urls = {
 # Conexión a MySQL usando PyMySQL (GLOBAL)
 cnx = None # Inicializar como None para evitar errores antes de la conexión
 
+proxys_cache = {}
+
 def obtener_proxys():
+    if proxys_cache.get("proxys"):  # Verificar si ya hay proxies en caché
+        return proxys_cache["proxys"]
+
     response = requests.get(API_URL)
     if response.status_code == 200:
-        proxys = response.text.splitlines()  # Divide la respuesta en líneas
+        proxys = response.text.splitlines()
         proxys_formateados = []
         for proxy in proxys:
             partes = proxy.split(":")
-            if len(partes) == 4:  # Verifica que tenga el formato esperado
+            if len(partes) == 4:
                 ip, puerto, usuario, contraseña = partes
                 proxy_formateado = f"{ip}:{puerto}:{usuario}:{contraseña}"
                 proxys_formateados.append(proxy_formateado)
+
+        proxys_cache["proxys"] = proxys_formateados  # Almacenar en caché
+        proxys_cache["timestamp"] = datetime.now()  # Guardar la hora de la consulta
         return proxys_formateados
     else:
         print("Error al obtener proxies de la API.")
