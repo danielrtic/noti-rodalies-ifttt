@@ -19,7 +19,7 @@ db_config = {
 def notificar_incidencia(incidencia):
     """Envía la incidencia al webhook de Google Chat."""
     mensaje = {
-        "text": f"Nueva incidencia en Rodalies:**\n"
+        "text": f"Nueva incidencia en Rodalies:\n"
                 f"Línea: {incidencia['linea']}\n"
                 f"Descripción: {incidencia['descripcion']}\n"
                 f"Fecha y hora: {incidencia['fecha']} {incidencia['hora']}"
