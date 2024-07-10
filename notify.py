@@ -33,8 +33,14 @@ try:
     connection = pymysql.connect(**db_config)
 
     with connection.cursor(pymysql.cursors.DictCursor) as cursor:
-        # Consulta para obtener una incidencia no notificada
-        sql = "SELECT linea, descripcion, fecha, hora FROM incidencia WHERE notificado = 'no' LIMIT 1"
+        # Consulta para obtener la incidencia más antigua no notificada (tabla "incidencias")
+        sql = """
+            SELECT linea, descripcion, fecha, hora 
+            FROM incidencias 
+            WHERE notificado = 'no' 
+            ORDER BY fecha ASC, hora ASC 
+            LIMIT 1
+        """  
         cursor.execute(sql)
         incidencia = cursor.fetchone()
 
@@ -43,8 +49,8 @@ try:
             exito = notificar_incidencia(incidencia)
 
             if exito:
-                # Actualizar el estado de la incidencia a notificada
-                update_sql = "UPDATE incidencia SET notificado = 'si' WHERE linea = %s AND fecha = %s AND hora = %s"
+                # Actualizar el estado de la incidencia a notificada (tabla "incidencias")
+                update_sql = "UPDATE incidencias SET notificado = 'si' WHERE linea = %s AND fecha = %s AND hora = %s"
                 cursor.execute(update_sql, (incidencia['linea'], incidencia['fecha'], incidencia['hora']))
                 connection.commit()  # Confirmar los cambios
 
