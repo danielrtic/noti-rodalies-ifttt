@@ -38,12 +38,12 @@ rss_urls = {
 }
 
 # Conexión a MySQL usando PyMySQL (GLOBAL)
-cnx = None # Inicializar como None para evitar errores antes de la conexión
+cnx = None  # Inicializar como None para evitar errores antes de la conexión
 
 proxys_cache = {}
 
 def obtener_proxys():
-    if proxys_cache.get("proxys"):  # Verificar si ya hay proxies en caché
+    if proxys_cache.get("proxys"):  
         return proxys_cache["proxys"]
 
     response = requests.get(API_URL)
@@ -57,8 +57,8 @@ def obtener_proxys():
                 proxy_formateado = f"{ip}:{puerto}:{usuario}:{contraseña}"
                 proxys_formateados.append(proxy_formateado)
 
-        proxys_cache["proxys"] = proxys_formateados  # Almacenar en caché
-        proxys_cache["timestamp"] = datetime.now()  # Guardar la hora de la consulta
+        proxys_cache["proxys"] = proxys_formateados 
+        proxys_cache["timestamp"] = datetime.now() 
         return proxys_formateados
     else:
         print("Error al obtener proxies de la API.")
@@ -97,14 +97,8 @@ def obtener_incidencias(rss_url):
     feed = feedparser.parse(response.content)
     incidencias = [{'title': entry.title, 'description': entry.description} for entry in feed.entries if 'description' in entry]
     if not incidencias:
-        print(f"No se encontraron incidencias en el feed: {rss_url}")  # Verificar si se obtienen incidencias
+        print(f"No se encontraron incidencias en el feed: {rss_url}") 
     return incidencias
-
-def notificar_incidencia(webhook_url, incidencia, nombre_de_linea):
-    payload = {
-        'text': f'Incidencia en la línea {nombre_de_linea}: {incidencia["description"]}'
-    }
-    requests.post(webhook_url, json=payload)
 
 def registrar_incidencia(cursor, nombre_de_linea, incidencia):
     fecha_actual = datetime.now().strftime('%Y-%m-%d')
@@ -137,7 +131,7 @@ def cargar_ultimas_incidencias(cursor):
 
 
 def main():
-    global cnx  # Indicar que estamos usando la variable global cnx
+    global cnx  
     try:
         # Conexión a MySQL usando PyMySQL
         cnx = pymysql.connect(
@@ -146,9 +140,9 @@ def main():
             password=DB_PASSWORD,
             database=DB_NAME
         )
-        print("Conexión a MySQL exitosa")  # Confirmar conexión
+        print("Conexión a MySQL exitosa") 
         cursor = cnx.cursor()
-    
+
         ultimas_incidencias = cargar_ultimas_incidencias(cursor)
         lineas_con_incidencias = set()
         for nombre_de_linea, rss_url in rss_urls.items():
@@ -156,26 +150,21 @@ def main():
             for incidencia in incidencias:
                 incidencia_notificada = False
                 for ultima_incidencia in ultimas_incidencias:
-                    if ultima_incidencia['description'] == incidencia['description'] and ultima_incidencia['fecha'] == datetime.now().strftime('%Y-%m-%d'):
+                    if (ultima_incidencia['description'] == incidencia['description'] and 
+                        ultima_incidencia['fecha'] == datetime.now().strftime('%Y-%m-%d')):
                         incidencia_notificada = True
                         break
-    
+
                 if not incidencia_notificada:
-                    notificar_incidencia(google_chat_webhook_url, incidencia, nombre_de_linea)
-                    lineas_con_incidencias.add(nombre_de_linea)
+                    lineas_con_incidencias.add(nombre_de_linea) 
                     ultimas_incidencias.append({
                         'description': incidencia['description'],
                         'fecha': datetime.now().strftime('%Y-%m-%d')
                     })
-    
-                registrar_incidencia(cursor, nombre_de_linea, incidencia)  # Intenta registrar (puede ser duplicado)
-    
-        if lineas_con_incidencias:
-            mensaje_final = f"Resumen de incidencias en las líneas: {', '.join(lineas_con_incidencias)}"
-            payload = {'text': mensaje_final}
-            requests.post(google_chat_webhook_url, json=payload)
 
-    except pymysql.MySQLError as e:  # Capturar errores específicos de MySQL
+                registrar_incidencia(cursor, nombre_de_linea, incidencia) 
+
+    except pymysql.MySQLError as e:  
         if e.args[0] == 2003:
             print(f"Error de conexión: No se puede conectar al servidor MySQL. Verifica el host y el puerto.")
         elif e.args[0] == 1045:
@@ -183,7 +172,7 @@ def main():
         else:
             print(f"Error general de MySQL: {e}")
     finally:
-        if cnx:  # Verificar si la conexión se estableció antes de cerrarla
+        if cnx: 
             cursor.close()
             cnx.close()
 
